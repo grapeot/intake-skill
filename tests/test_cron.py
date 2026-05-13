@@ -11,8 +11,10 @@ def test_cron_dry_run_appends_midnight_line(tmp_path) -> None:
     summary = cron.append_cron(tmp_path, dry_run=True, current="MAILTO=me@example.com\n")
     assert summary["dry_run"] is True
     assert "0 0 * * *" in summary["cron_line"]
+    assert "--date $(date -v-1d +\\%Y\\%m\\%d)" in summary["cron_line"]
     assert "--asr-engine mlx --postprocess-engine codex" in summary["cron_line"]
-    assert summary["schedule_label"] == "Every night at midnight"
+    assert summary["schedule_label"] == "Every day at 00:00"
+    assert summary["target_day"] == "previous calendar day"
     assert cron.CRON_MARKER in summary["new_crontab"]
     assert "MAILTO=me@example.com" in summary["new_crontab"]
 
@@ -31,8 +33,16 @@ def test_replace_managed_cron_updates_time_and_preserves_other_lines(tmp_path) -
 
     assert summary["schedule_time"] == "07:30"
     assert "30 7 * * *" in summary["cron_line"]
+    assert summary["target_day"] == "previous calendar day"
     assert "MAILTO=me@example.com" in summary["new_crontab"]
     assert old_line not in summary["new_crontab"]
+
+
+def test_afternoon_cron_processes_current_calendar_day(tmp_path) -> None:
+    summary = cron.replace_managed_cron(tmp_path, schedule_time="16:30", dry_run=True, current="")
+
+    assert summary["target_day"] == "current calendar day"
+    assert "--date $(date -v-1d +\\%Y\\%m\\%d)" not in summary["cron_line"]
 
 
 def test_remove_managed_cron_preserves_unrelated_crontab(tmp_path) -> None:

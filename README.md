@@ -60,6 +60,8 @@ The nightly automatic run is optional and should be enabled only after the opera
 
 Cron runs with a minimal environment. The managed cron line sets a stable `PATH` that includes common Homebrew locations so tools such as `ffmpeg` and `ffprobe` can be found during scheduled runs.
 
+Scheduled runs before noon process the previous calendar day. This makes a `00:01` run collect the Voice Memos from the day that just ended instead of creating an empty report for the new day. Scheduled runs at noon or later process the current calendar day.
+
 ## Local Dashboard
 
 After installation, operators can start a local browser dashboard:
@@ -84,7 +86,7 @@ The dashboard also includes local controls:
 
 - `Generate now`: run today's full `sync -> ASR -> Codex postprocess` pipeline immediately
 - report links: open generated daily HTML reports from the recent-days table
-- `Set schedule`: change the managed daily cron trigger time
+- `Set schedule`: change the managed daily cron trigger time. Morning schedules process the previous calendar day; afternoon/evening schedules process the current calendar day.
 - `Disable cron`: remove the managed Intake Skill cron entry while preserving unrelated crontab lines
 - `Keep Mac awake`: start `caffeinate -i -s`, allowing the display to sleep while preventing system idle sleep
 - `Stop awake mode`: stop the dashboard-managed `caffeinate` process

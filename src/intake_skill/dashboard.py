@@ -359,8 +359,11 @@ def _cron_status(config: IntakeConfig) -> dict[str, object]:
     active = bool(matching)
     schedule_time = None
     next_run = None
+    target_day = None
     if matching:
-        fields = matching[0].split()
+        line = matching[0]
+        target_day = "previous calendar day" if "date -v-1d" in line else "current calendar day"
+        fields = line.split()
         if len(fields) >= 2 and fields[0].isdigit() and fields[1].isdigit():
             minute = int(fields[0])
             hour = int(fields[1])
@@ -375,6 +378,7 @@ def _cron_status(config: IntakeConfig) -> dict[str, object]:
         "legacy_unmanaged_lines": legacy,
         "schedule_time": schedule_time,
         "next_run": next_run,
+        "target_day": target_day,
     }
 
 
@@ -702,7 +706,8 @@ DASHBOARD_HTML = """<!doctype html>
       const response = await fetch("/api/status", { cache: "no-store" });
       const data = await response.json();
       el("cronValue").replaceChildren(statusNode(data.cron.active, data.cron.active ? "Installed" : "Not installed"));
-      el("cronDetail").textContent = data.cron.active ? `At ${data.cron.schedule_time || "unknown"}, next ${data.cron.next_run}` : "No automation is installed.";
+      const targetDay = data.cron.target_day ? `, processes ${data.cron.target_day}` : "";
+      el("cronDetail").textContent = data.cron.active ? `At ${data.cron.schedule_time || "unknown"}, next ${data.cron.next_run}${targetDay}` : "No automation is installed.";
       if (data.cron.schedule_time) el("scheduleTime").value = data.cron.schedule_time;
       el("lastRunValue").textContent = data.runtime.running ? "Running" : data.log.summary.status;
       el("lastRunDetail").textContent = data.log.summary.last_marker || data.log.latest_update || "No run log yet";

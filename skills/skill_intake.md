@@ -178,7 +178,7 @@ python -m intake_skill install-cron
 
 The CLI also writes a timestamped backup under `logs/crontab_backup_*.txt` and appends one marked line if absent. Append only; never replace the user's existing schedule. Do not install the nightly run during tests or documentation-only changes.
 
-Remind the operator that the nightly run works only when the Mac is awake at the scheduled time and Voice Memos is running or syncing often enough for new recordings to appear in the source directory. Also tell the operator that Voice Memos iCloud sync should be enabled if they rely on it, the Mac should be plugged in, and macOS may show a permission dialog when the schedule is installed.
+Remind the operator that the nightly run works only when the Mac is awake at the scheduled time and Voice Memos is running or syncing often enough for new recordings to appear in the source directory. Scheduled runs before noon process the previous calendar day, so a `00:01` run handles the day that just ended. Scheduled runs at noon or later process the current calendar day. Also tell the operator that Voice Memos iCloud sync should be enabled if they rely on it, the Mac should be plugged in, and macOS may show a permission dialog when the schedule is installed.
 
 ## Debug Playbook
 
@@ -208,7 +208,7 @@ Run `which codex` and the trivial `codex exec --full-auto -c model_reasoning_eff
 
 ### Nightly Run Did Not Run
 
-Check `crontab -l` for the `# intake_skill nightly run` marker. Inspect `logs/intake_cron.log`. Confirm the repo `.venv/bin/python` path still exists, the Mac was awake, and Voice Memos had synced files before midnight. Do not reinstall the nightly run by replacing the whole schedule; rerun `install-cron --dry-run` and compare the marker.
+Check `crontab -l` for the `# intake_skill nightly run` marker. Inspect `logs/intake_cron.log`. Confirm the repo `.venv/bin/python` path still exists, the Mac was awake, and Voice Memos had synced files before the scheduled time. For a before-noon schedule, check the previous day's `data/YYYYMMDD/` folder because the managed line intentionally processes the previous calendar day. Do not reinstall the nightly run by replacing the whole schedule; rerun `install-cron --dry-run` and compare the marker.
 
 ### Output files are missing
 

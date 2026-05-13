@@ -10,6 +10,8 @@ from pathlib import Path
 CRON_MARKER = "# intake_skill nightly run"
 LEGACY_CRON_MARKERS = ("# intake_skill midnight run",)
 CRON_PATH = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+PREVIOUS_DAY_CUTOFF_HOUR = 12
+PREVIOUS_DAY_DATE_ARG = "$(date -v-1d +\\%Y\\%m\\%d)"
 
 
 def validate_schedule_time(value: str) -> tuple[int, int]:
@@ -26,14 +28,22 @@ def validate_schedule_time(value: str) -> tuple[int, int]:
     return hour, minute
 
 
+def cron_target_day(hour: int) -> str:
+    if hour < PREVIOUS_DAY_CUTOFF_HOUR:
+        return "previous calendar day"
+    return "current calendar day"
+
+
 def cron_line(repo_root: Path, hour: int = 0, minute: int = 0) -> str:
     python_path = repo_root / ".venv" / "bin" / "python"
     log_path = repo_root / "logs" / "intake_cron.log"
+    date_arg = f"--date {PREVIOUS_DAY_DATE_ARG} " if cron_target_day(hour).startswith("previous") else ""
     return (
         f"{minute} {hour} * * * "
         f"PATH={shlex.quote(CRON_PATH)}; "
         f"cd {shlex.quote(str(repo_root))} && "
         f"{shlex.quote(str(python_path))} -m intake_skill run-day "
+        f"{date_arg}"
         "--asr-engine mlx --postprocess-engine codex "
         f">> {shlex.quote(str(log_path))} 2>&1 "
         f"{CRON_MARKER}"
@@ -98,10 +108,11 @@ def replace_managed_cron(repo_root: Path, schedule_time: str = "00:00", dry_run:
         "dry_run": dry_run,
         "already_present": line in existing.splitlines(),
         "schedule_time": f"{hour:02d}:{minute:02d}",
+        "target_day": cron_target_day(hour),
         "cron_line": line,
         "backup_path": str(path),
-        "schedule_label": "Every night at midnight",
-        "user_note": "This sets up Intake Skill to run automatically each night when the Mac is awake.",
+        "schedule_label": f"Every day at {hour:02d}:{minute:02d}",
+        "user_note": f"This sets up Intake Skill to run automatically when the Mac is awake and process the {cron_target_day(hour)}.",
     }
     if dry_run:
         summary["new_crontab"] = new_crontab
