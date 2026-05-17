@@ -36,6 +36,8 @@ python -m intake_skill run-day --date YYYYMMDD --asr-engine mlx --postprocess-en
 python -m intake_skill dashboard
 ```
 
+VAD preprocessing is optional and disabled by default. When the operator wants silence removal before MLX ASR and has installed the optional `silero-vad` dependencies, add `--vad` to `asr` or `run-day`.
+
 Most operators use one of two modes:
 
 - manual mode: run `run-day` when they want the latest Voice Memos processed
