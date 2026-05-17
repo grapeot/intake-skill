@@ -11,7 +11,7 @@ class AsrModule(Protocol):
     importlib: Any
     QWEN_ASR_MODEL: str
 
-    def run_asr(self, data_dir: Path, day: str, engine: str = "mock", mock_text: str | None = None) -> dict[str, object]: ...
+    def run_asr(self, data_dir: Path, day: str, engine: str = "mock", mock_text: str | None = None, vad: bool = False, vad_threshold: float = 0.5, vad_speech_pad_ms: int = 1000) -> dict[str, object]: ...
 
 
 class PostprocessModule(Protocol):
@@ -130,6 +130,94 @@ def test_codex_prompt_uses_external_template_and_guardrails(tmp_path: Path) -> N
     assert "Do not invent facts" in prompt
     assert str(tmp_path / "20260512" / "transcript_20260512.csv") in prompt
     assert str(tmp_path / "20260512" / "daily_20260512.md") in prompt
+
+
+def test_mlx_asr_with_vad_skips_silent_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    day = "20260512"
+    day_dir = tmp_path / day
+    day_dir.mkdir()
+    (day_dir / "20260512_0930_watch.m4a").write_bytes(b"fake-audio")
+
+    def fake_vad(
+        audio_path: Path,
+        vad_threshold: float = 0.5,
+        vad_speech_pad_ms: int = 1000,
+    ) -> tuple[Path | None, dict[str, object]]:
+        return None, {"vad_applied": True, "speech_chunks": 0, "speech_duration_sec": 0.0}
+
+    monkeypatch.setattr(asr, "preprocess_with_vad", fake_vad)
+
+    def fake_import_module(name: str) -> object:
+        assert name == "mlx_qwen3_asr"
+        return SimpleNamespace(transcribe=lambda path, **kwargs: SimpleNamespace(chunks=[]))
+
+    monkeypatch.setattr(asr.importlib, "import_module", fake_import_module)
+
+    summary = asr.run_asr(tmp_path, day, engine="mlx", vad=True)
+
+    assert summary["engine"] == "mlx"
+    assert summary["row_count"] == 0
+    assert summary.get("vad") == {"vad_applied": True, "speech_chunks": 0, "speech_duration_sec": 0.0}
+
+
+def test_mlx_asr_with_vad_passes_processed_audio(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    day = "20260512"
+    day_dir = tmp_path / day
+    day_dir.mkdir()
+    (day_dir / "20260512_0930_watch.m4a").write_bytes(b"fake-audio")
+    processed_file = tmp_path / "processed.wav"
+    processed_file.write_bytes(b"vad-output-audio")
+
+    def fake_vad(
+        audio_path: Path,
+        vad_threshold: float = 0.5,
+        vad_speech_pad_ms: int = 1000,
+    ) -> tuple[Path | None, dict[str, object]]:
+        return processed_file, {"vad_applied": True, "speech_chunks": 1, "speech_duration_sec": 0.5}
+
+    monkeypatch.setattr(asr, "preprocess_with_vad", fake_vad)
+    monkeypatch.setattr(asr, "cleanup_vad_temp", lambda path: None)
+
+    captured_path: list[str] = []
+
+    def fake_transcribe(path: str, **kwargs: object) -> object:
+        captured_path.append(path)
+        return SimpleNamespace(chunks=[{"text": " vad processed speech "}])
+
+    def fake_import_module(name: str) -> object:
+        assert name == "mlx_qwen3_asr"
+        return SimpleNamespace(transcribe=fake_transcribe)
+
+    monkeypatch.setattr(asr.importlib, "import_module", fake_import_module)
+
+    summary = asr.run_asr(tmp_path, day, engine="mlx", vad=True)
+
+    assert summary["row_count"] == 1
+    assert captured_path[0] == str(processed_file)
+    assert captured_path[0] != str(day_dir / "20260512_0930_watch.m4a")
+
+
+def test_mlx_asr_without_vad_unchanged(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    day = "20260512"
+    day_dir = tmp_path / day
+    day_dir.mkdir()
+    audio = day_dir / "20260512_0930_watch.m4a"
+    audio.write_bytes(b"fake-audio")
+
+    def fake_transcribe(path: str, **kwargs: object) -> object:
+        return SimpleNamespace(chunks=[{"text": " default behavior "}])
+
+    def fake_import_module(name: str) -> object:
+        assert name == "mlx_qwen3_asr"
+        return SimpleNamespace(transcribe=fake_transcribe)
+
+    monkeypatch.setattr(asr.importlib, "import_module", fake_import_module)
+
+    summary = asr.run_asr(tmp_path, day, engine="mlx")
+
+    assert summary["engine"] == "mlx"
+    assert summary["row_count"] == 1
+    assert "vad" not in summary
 
 
 def test_codex_postprocess_uses_configured_default_model(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

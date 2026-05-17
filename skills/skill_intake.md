@@ -79,6 +79,8 @@ Before running this step, tell the user in plain language that the first transcr
 
 If the Mac, Python version, package resolver, or network cannot install `mlx-qwen3-asr`, or if the model cannot download or execute, mark setup blocked. Include the exact command, exit code, and error text. Do not declare setup complete based on mock engines.
 
+VAD preprocessing is optional. If the user asks to remove silence before ASR, install the optional extra with `uv pip install -e '.[vad]'` or include it with the existing install extras, then pass `--vad` to `asr` or `run-day`. VAD uses ffmpeg plus the lockfile-covered `silero-vad` package at runtime. Do not make VAD part of the default setup gate unless the user asks for it.
+
 ## Sample Audio End-to-End Validation
 
 Use synthetic audio with no private content. This validates the same file contracts the nightly job uses.
@@ -165,6 +167,13 @@ Inspect the JSON `items` array. Confirm sources are under the Voice Memos direct
 python -m intake_skill run-day --date YYYYMMDD --asr-engine mlx --postprocess-engine codex
 ```
 
+To remove silence before MLX ASR on a manual run, install the optional VAD extra and add `--vad`:
+
+```bash
+uv pip install -e '.[vad]'
+python -m intake_skill run-day --date YYYYMMDD --asr-engine mlx --postprocess-engine codex --vad
+```
+
 Use the real Voice Memos path only after the synthetic-sample MLX and Codex validation succeeds.
 
 ## Nightly Automatic Run
@@ -233,9 +242,9 @@ Trace the pipeline in order: sync should produce `.m4a` files under `data/YYYYMM
 ```bash
 python -m intake_skill doctor [--source PATH] [--data-dir PATH] [--repo-root PATH]
 python -m intake_skill sync [--source PATH] [--data-dir PATH] [--date YYYYMMDD] [--dry-run]
-python -m intake_skill asr [--data-dir PATH] [--date YYYYMMDD] [--engine mock|mlx] [--mock-text TEXT]
+python -m intake_skill asr [--data-dir PATH] [--date YYYYMMDD] [--engine mock|mlx] [--mock-text TEXT] [--vad] [--vad-threshold FLOAT] [--vad-speech-pad-ms N]
 python -m intake_skill postprocess [--data-dir PATH] [--date YYYYMMDD] [--engine mock|codex]
-python -m intake_skill run-day [--source PATH] [--data-dir PATH] [--date YYYYMMDD] [--asr-engine mock|mlx] [--postprocess-engine mock|codex] [--mock-text TEXT] [--dry-run-sync]
+python -m intake_skill run-day [--source PATH] [--data-dir PATH] [--date YYYYMMDD] [--asr-engine mock|mlx] [--postprocess-engine mock|codex] [--mock-text TEXT] [--dry-run-sync] [--vad] [--vad-threshold FLOAT] [--vad-speech-pad-ms N]
 python -m intake_skill install-cron [--repo-root PATH] [--dry-run]
 python -m intake_skill make-sample-audio --output PATH [--seconds N]
 ```

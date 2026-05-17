@@ -14,6 +14,11 @@ dev = [
 qwen-asr = [
     "mlx-qwen3-asr>=0.3.2",
 ]
+vad = [
+    "silero-vad>=6.0,<7",
+    "torch>=2.0",
+    "torchaudio>=2.0",
+]
 
 [project.scripts]
 intake-skill = "intake_skill.cli:main"
