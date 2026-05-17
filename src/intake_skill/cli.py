@@ -49,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     asr.add_argument("--date", default=today(), help="Day to transcribe as YYYYMMDD")
     asr.add_argument("--engine", choices=["mock", "mlx"], default="mlx")
     asr.add_argument("--mock-text", default=None, help="Use this exact content for each mock transcript row")
+    asr.add_argument("--vad", action="store_true", default=False, help="Enable VAD preprocessing to remove silence before transcription")
+    asr.add_argument("--vad-threshold", type=float, default=0.5, help="VAD detection threshold (default: 0.5)")
+    asr.add_argument("--vad-speech-pad-ms", type=int, default=1000, help="Padding in ms around speech segments (default: 1000)")
 
     post = subparsers.add_parser("postprocess", help="Generate daily reports from a transcript")
     add_common_paths(post)
@@ -62,6 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_day.add_argument("--postprocess-engine", choices=["mock", "codex"], default="codex")
     run_day.add_argument("--mock-text", default=None, help="Use this exact content for mock ASR during run-day")
     run_day.add_argument("--dry-run-sync", action="store_true", help="Plan sync only; ASR and postprocess still run against existing data")
+    run_day.add_argument("--vad", action="store_true", default=False, help="Enable VAD preprocessing to remove silence before transcription")
+    run_day.add_argument("--vad-threshold", type=float, default=0.5, help="VAD detection threshold (default: 0.5)")
+    run_day.add_argument("--vad-speech-pad-ms", type=int, default=1000, help="Padding in ms around speech segments (default: 1000)")
 
     cron = subparsers.add_parser("install-cron", help="Set up the optional nightly run")
     add_common_paths(cron)
@@ -107,12 +113,28 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     if args.command == "sync":
         return sync_voice_memos(config.source_dir, config.data_dir, dry_run=args.dry_run, day=args.date)
     if args.command == "asr":
-        return run_asr(config.data_dir, args.date, engine=args.engine, mock_text=args.mock_text)
+        return run_asr(
+            config.data_dir,
+            args.date,
+            engine=args.engine,
+            mock_text=args.mock_text,
+            vad=args.vad,
+            vad_threshold=args.vad_threshold,
+            vad_speech_pad_ms=args.vad_speech_pad_ms,
+        )
     if args.command == "postprocess":
         return run_postprocess(config.data_dir, args.date, engine=args.engine)
     if args.command == "run-day":
         sync_summary = sync_voice_memos(config.source_dir, config.data_dir, dry_run=args.dry_run_sync, day=args.date)
-        asr_summary = run_asr(config.data_dir, args.date, engine=args.asr_engine, mock_text=args.mock_text)
+        asr_summary = run_asr(
+            config.data_dir,
+            args.date,
+            engine=args.asr_engine,
+            mock_text=args.mock_text,
+            vad=args.vad,
+            vad_threshold=args.vad_threshold,
+            vad_speech_pad_ms=args.vad_speech_pad_ms,
+        )
         post_summary = run_postprocess(config.data_dir, args.date, engine=args.postprocess_engine)
         return {"command": "run-day", "day": args.date, "steps": [sync_summary, asr_summary, post_summary]}
     if args.command == "install-cron":
