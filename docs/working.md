@@ -2,6 +2,18 @@
 
 ## Changelog
 
+### 2026-05-17
+
+- Added optional VAD (Voice Activity Detection) preprocessing for the MLX ASR engine. The new `--vad` flag on `asr` and `run-day` commands enables Silero VAD-based silence removal before transcription. Tuning flags `--vad-threshold` (default 0.5) and `--vad-speech-pad-ms` (default 1000) control VAD sensitivity and segment padding.
+- Created `src/intake_skill/vad.py` as a standalone VAD utility module. It uses ffmpeg to resample to 16 kHz mono WAV, loads Silero VAD through the lockfile-covered `silero-vad` package at runtime, concatenates speech segments into a temporary WAV, and returns metadata when no speech is detected. All lazy imports ensure the module is importable without optional VAD dependencies.
+- Added `[vad]` optional dependency group in `pyproject.toml` with `silero-vad>=6.0,<7`, `torch>=2.0`, and `torchaudio>=2.0`.
+- VAD is disabled by default (`--vad` is a store-true flag). Existing default behavior (`python -m intake_skill asr --engine mlx`) produces identical output to before.
+- Mock ASR accepts VAD flags but does not load torch, Silero, or ffmpeg.
+- The transcript CSV contract (`speaker,content` with blank speakers) is unchanged.
+- Added offline test coverage: `test_vad.py` tests VAD module with monkeypatched torch/hub dependencies (speech detection, no-speech skip, temp cleanup). `test_asr_postprocess.py` tests VAD+MLX integration (silent file skip, VAD-processed path routing, vad=False unchanged). `test_cli.py` tests VAD flag parsing and `run-day` flag propagation.
+- Updated README, test notes, and the AI-facing skill guide to document optional VAD installation and command flags.
+- Validation update: `uv lock` refreshed the optional VAD dependency graph; `python -m pytest -q` passed with 39 tests; LSP diagnostics were clean for changed Python files; CLI manual QA covered `python -m intake_skill asr --help`, `python -m intake_skill run-day --help`, and `python -m intake_skill asr --engine mock --vad`.
+
 ### 2026-05-13
 
 - Replaced the live `mlx` ASR backend from `mlx-whisper` to `mlx-qwen3-asr`, matching the local life_record pipeline and explicitly using `Qwen/Qwen3-ASR-1.7B`.
@@ -29,6 +41,11 @@
 - Validation update: `python -m pytest -q` passed with 23 tests after adding dashboard status coverage, CLI parser coverage, cron schedule/remove coverage, selected-day run coverage, log summary coverage, and tmp cleanup coverage.
 
 ## Lessons Learned
+
+- When importing a function with `from .module import func`, monkeypatching the source module does not affect the importing module's local name binding. Tests must patch the target namespace (`cli.func`) not the source namespace (`module.func`).
+- VAD preprocessing introduces a cross-module dependency pattern: the ASR pipeline imports VAD functions at module level, which makes them straightforward to monkeypatch in tests but means they must not import optional VAD deps at the module level either. Lazy imports inside the VAD functions solve this cleanly.
+- Test monkeypatches of private module functions (`_load_silero_vad`, `_detect_speech`, etc.) need to cover the entire call chain. Testing `preprocess_with_vad` requires mocking all three private functions it calls, not just the leaf functions.
+- Protocol types for test modules need explicit update when function signatures change. The `AsrModule` Protocol in test fixtures must match the runtime API to keep type checkers satisfied.
 
 - Keep the sync source restricted to Voice Memos. Expanding to other audio sources changes privacy and consent assumptions.
 - The transcript CSV schema is an external contract: exactly `speaker,content`, with blank speaker values unless a future explicit requirement changes that boundary.
