@@ -135,10 +135,13 @@ def test_codex_prompt_uses_external_template_and_guardrails(tmp_path: Path) -> N
 def test_codex_postprocess_uses_configured_default_model(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run(command: list[str], cwd: Path, check: bool) -> None:
+    def fake_run(
+        command: list[str], cwd: Path, check: bool, stdin: object | None = None
+    ) -> None:
         captured["command"] = command
         captured["cwd"] = cwd
         captured["check"] = check
+        captured["stdin"] = stdin
 
     monkeypatch.setattr(postprocess.subprocess, "run", fake_run)
 
@@ -147,6 +150,10 @@ def test_codex_postprocess_uses_configured_default_model(tmp_path: Path, monkeyp
     command = captured["command"]
     assert isinstance(command, list)
     assert summary["engine"] == "codex"
-    assert command[:3] == ["codex", "exec", "--full-auto"]
+    assert command[:2] == ["codex", "exec"]
+    assert command[2:4] == ["--sandbox", "workspace-write"]
+    assert "--skip-git-repo-check" in command
+    assert "--full-auto" not in command
     assert "-m" not in command
-    assert command[3:5] == ["-c", "model_reasoning_effort=low"]
+    assert command[5:7] == ["-c", "model_reasoning_effort=low"]
+    assert captured["stdin"] is postprocess.subprocess.DEVNULL
