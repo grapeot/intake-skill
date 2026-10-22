@@ -111,12 +111,14 @@ def run_codex_postprocess(data_dir: Path, day: str) -> dict[str, object]:
     command = [
         "codex",
         "exec",
-        "--full-auto",
+        "--sandbox",
+        "workspace-write",
+        "--skip-git-repo-check",
         "-c",
         "model_reasoning_effort=low",
         prompt_path.read_text(encoding="utf-8"),
     ]
-    _ = subprocess.run(command, cwd=directory, check=True)
+    _ = subprocess.run(command, cwd=directory, check=True, stdin=subprocess.DEVNULL)
     return {"command": "postprocess", "engine": "codex", "day": day, "prompt_path": str(prompt_path)}
 
 
